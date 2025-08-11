@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نموذج طلب سحب رصيد</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .form-container {
+            max-width: 450px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .form-field {
+            margin-bottom: 0.75rem;
+        }
+        label {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+            color: #555;
+        }
+        label .emoji {
+            margin-left: 0.5rem;
+            font-size: 1.2em;
+        }
+        .field-description {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: -0.25rem;
+            margin-bottom: 0.5rem;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.4rem 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .logo {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .title {
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #444;
+        }
+        .submit-button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #007bff;
+            color: #fff;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        .submit-button:hover {
+            background-color: #0056b3;
+        }
+        .info-box {
+            background-color: #e9f2ff;
+            border: 1px solid #b3d7ff;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        .info-box.red {
+            background-color: #ffe9e9;
+            border-color: #ffb3b3;
+            color: #b30000;
+        }
+        .total-amount-box {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background-color: #e2f0d9;
+            border: 1px solid #c8e6c9;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const sanitizeInput = (input) => {
+            if (typeof input !== 'string') return input;
+            const div = document.createElement('div');
+            div.innerText = input;
+            return div.innerHTML;
+        };
+
+        const App = () => {
+            const [formData, setFormData] = useState({
+                balance_type: '',
+                crypto_name: 'USDT',
+                crypto_network: '',
+                wallet_name: '',
+                wallet_currency: 'USD',
+                amount_requested: '',
+                service_fee_value: 0,
+                sender_address: '',
+                notes: '',
+                payout_method: '',
+                payout_currency: 'ريال يمني جديد',
+                receiver_bank_info: '',
+                final_amount_due_local: 0,
+            });
+
+            const [formSubmitted, setFormSubmitted] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [orderId, setOrderId] = useState('');
+            const [error, setError] = useState('');
+
+            const exchangeRates = {
+                'ريال سعودي': 3.8,
+                'ريال يمني قديم': 533,
+                'ريال يمني جديد': 1600,
+            };
+            const feeRates = {
+                flat_fee: 1, // for amounts <= 50
+                percentage_fee: 0.02, // 2% for amounts > 50
+            };
+
+            const calculateServiceFee = (amount) => {
+                if (amount <= 50) {
+                    return feeRates.flat_fee;
+                } else {
+                    return amount * feeRates.percentage_fee;
+                }
+            };
+
+            const calculateFinalAmount = (amount, fee, localCurrency) => {
+                const amountAfterFee = amount - fee;
+                const convertedAmount = amountAfterFee * (exchangeRates[localCurrency] || 1);
+                return {
+                    amount_after_fee: amountAfterFee,
+                    converted_amount: convertedAmount,
+                };
+            };
+
+            useEffect(() => {
+                const updatedAmount = parseFloat(formData.amount_requested);
+                if (isNaN(updatedAmount) || updatedAmount <= 0) {
+                    setFormData(prev => ({
+                        ...prev,
+                        service_fee_value: 0,
+                        final_amount_due_local: 0,
+                    }));
+                    return;
+                }
+
+                const fee = calculateServiceFee(updatedAmount);
+                const amounts = calculateFinalAmount(updatedAmount, fee, formData.payout_currency);
+
+                setFormData(prev => ({
+                    ...prev,
+                    service_fee_value: fee,
+                    final_amount_due_local: amounts.converted_amount,
+                }));
+
+            }, [formData.amount_requested, formData.payout_currency]);
+
+            const handleInputChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({ ...prev, [name]: value }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setIsSubmitting(true);
+                if (parseFloat(formData.amount_requested) <= 0) {
+                    setError('المبلغ المطلوب سحبه يجب أن يكون أكبر من صفر.');
+                    setIsSubmitting(false);
+                    return;
+                }
+                if (parseFloat(formData.amount_requested) <= formData.service_fee_value) {
+                    setError('المبلغ المطلوب سحبه يجب أن يكون أكبر من رسوم الخدمة.');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                const pseudoOrderId = 'WITHDRAW-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+                setOrderId(pseudoOrderId);
+                setFormSubmitted(true);
+                setIsSubmitting(false);
+            };
+
+            const handleShare = () => {
+                const sanitizedFormData = Object.fromEntries(
+                    Object.entries(formData).map(([key, value]) => [key, sanitizeInput(value)])
+                );
+
+                const payoutMethodForShare = sanitizedFormData.payout_method;
+
+                const shareText = `*تم إرسال طلب سحب جديد!*
+-----------------------------
+*رقم الطلب:* ${sanitizeInput(orderId)}
+*نوع الرصيد:* محفظة إلكترونية
+*اسم المحفظة:* ${sanitizeInput(sanitizedFormData.wallet_name)}
+*عملة المحفظة:* ${sanitizeInput(sanitizedFormData.wallet_currency)}
+*المبلغ المطلوب سحبه:* ${sanitizeInput(sanitizedFormData.amount_requested)} ${sanitizeInput(sanitizedFormData.wallet_currency)}
+*رسوم الخدمة:* ${sanitizeInput(sanitizedFormData.service_fee_value.toFixed(2))} ${sanitizeInput(sanitizedFormData.wallet_currency)}
+*المبلغ المستلم بعد الرسوم:* ${(parseFloat(sanitizedFormData.amount_requested) - parseFloat(sanitizedFormData.service_fee_value)).toFixed(2)} ${sanitizeInput(sanitizedFormData.wallet_currency)}
+*عنوان الإرسال:* ${sanitizeInput(sanitizedFormData.sender_address)}
+*الملاحظات:* ${sanitizeInput(sanitizedFormData.notes) || 'لا توجد'}
+*طريقة الاستلام:* ${sanitizeInput(payoutMethodForShare)}
+*العملة المحلية المطلوبة:* ${sanitizeInput(sanitizedFormData.payout_currency)}
+*المبلغ النهائي للاستلام (بالعملة المحلية):* ${sanitizeInput(sanitizedFormData.final_amount_due_local.toFixed(2))} ${sanitizeInput(sanitizedFormData.payout_currency)}
+*بيانات حساب الاستلام:* ${sanitizeInput(sanitizedFormData.receiver_bank_info)}`;
+
+                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+                window.open(whatsappUrl, '_blank');
+            };
+
+
+            if (formSubmitted) {
+                const payoutMethodForShare = formData.payout_method;
+                const amountAfterFee = parseFloat(formData.amount_requested) - parseFloat(formData.service_fee_value);
+
+                return (
+                    <div className="form-container text-right">
+                        <h2 className="title">تم استلام طلب سحبك بنجاح!</h2>
+                        <div className="info-box my-4 p-4 text-sm bg-green-50 border-green-200">
+                            <p className="font-bold text-green-800">
+                                <span className="emoji">👈</span> خطوة مهمة!
+                            </p>
+                            <p className="text-green-700 mt-1">
+                                لإتمام المعاملة، اضغط على زر "مشاركة على واتساب" لإرسال تفاصيل طلبك إلى خدمة العملاء.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-gray-100 rounded-md text-sm">
+                            <p><strong>رقم الطلب:</strong> {sanitizeInput(orderId)}</p>
+                            <p><strong>نوع الرصيد:</strong> محفظة إلكترونية</p>
+                            <p><strong>اسم المحفظة:</strong> {sanitizeInput(formData.wallet_name)}</p>
+                            <p><strong>عملة المحفظة:</strong> {sanitizeInput(formData.wallet_currency)}</p>
+                            <p><strong>المبلغ المطلوب سحبه:</strong> {sanitizeInput(formData.amount_requested)} {sanitizeInput(formData.wallet_currency)}</p>
+                            <p><strong>رسوم الخدمة:</strong> {sanitizeInput(formData.service_fee_value.toFixed(2))} {sanitizeInput(formData.wallet_currency)}</p>
+                            <p><strong>المبلغ المستلم بعد الرسوم:</strong> {sanitizeInput(amountAfterFee.toFixed(2))} {sanitizeInput(formData.wallet_currency)}</p>
+                            <p><strong>عنوان الإرسال:</strong> {sanitizeInput(formData.sender_address)}</p>
+                            <p><strong>الملاحظات:</strong> {sanitizeInput(formData.notes) || 'لا توجد'}</p>
+                            <p><strong>طريقة الاستلام:</strong> {sanitizeInput(payoutMethodForShare)}</p>
+                            <p><strong>العملة المحلية المطلوبة:</strong> {sanitizeInput(formData.payout_currency)}</p>
+                            <p><strong>المبلغ النهائي للاستلام (بالعملة المحلية):</strong> {sanitizeInput(formData.final_amount_due_local.toFixed(2))} {sanitizeInput(formData.payout_currency)}</p>
+                            <p><strong>بيانات حساب الاستلام:</strong> {sanitizeInput(formData.receiver_bank_info)}</p>
+                        </div>
+                        <button
+                            onClick={handleShare}
+                            className="submit-button mt-4 bg-green-500 hover:bg-green-600"
+                        >
+                            <span className="emoji">✅</span> مشاركة على واتساب
+                        </button>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="form-container" dir="rtl">
+                    <form onSubmit={handleSubmit}>
+                        <div className="logo">
+                            <img src="https://i.imgur.com/gK5yR45.png" alt="BitcoYemen Logo" className="h-10" />
+                        </div>
+                        <h1 className="title">نموذج طلب سحب رصيد</h1>
+                        {isSubmitting && (
+                            <div className="text-center my-4">
+                                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent"></div>
+                                <p className="text-gray-600">جاري إرسال طلبك...</p>
+                            </div>
+                        )}
+                        {error && (
+                            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative my-2 text-sm" role="alert">
+                                <span>{error}</span>
+                            </div>
+                        )}
+                        
+                        <div className="form-field">
+                            <label>
+                                <span className="emoji">📝</span> نوع الرصيد المراد سحبه
+                            </label>
+                            <p className="field-description">اختر ما إذا كنت تسحب من محفظة إلكترونية أو عملة رقمية.</p>
+                            <select
+                                name="balance_type"
+                                value={formData.balance_type}
+                                onChange={handleInputChange}
+                                required
+                            >
+                                <option value="">اختر...</option>
+                                <option value="wallet">محفظة إلكترونية</option>
+                            </select>
+                        </div>
+
+                        {formData.balance_type === 'wallet' && (
+                            <>
+                                <div className="form-field">
+                                    <label>
+                                        <span className="emoji">👛</span> ما اسم المحفظة؟
+                                    </label>
+                                    <p className="field-description">حدد اسم المحفظة التي ستسحب منها (مثل PayPal).</p>
+                                    <select
+                                        name="wallet_name"
+                                        value={formData.wallet_name}
+                                        onChange={handleInputChange}
+                                        required
+                                    >
+                                        <option value="">اختر...</option>
+                                        <option value="PayPal">PayPal</option>
+                                        <option value="Payoneer">Payoneer</option>
+                                        <option value="Wise">Wise</option>
+                                        <option value="Perfect Money">Perfect Money</option>
+                                    </select>
+                                </div>
+                                <div className="form-field">
+                                    <label>
+                                        <span className="emoji">💵</span> العملة داخل المحفظة
+                                    </label>
+                                    <p className="field-description">حدد عملة المحفظة التي ستسحب منها.</p>
+                                    <select
+                                        name="wallet_currency"
+                                        value={formData.wallet_currency}
+                                        onChange={handleInputChange}
+                                        required
+                                    >
+                                        <option value="USD">USD</option>
+                                        <option value="EUR">EUR</option>
+                                    </select>
+                                </div>
+                                <div className="form-field">
+                                    <label>
+                                        <span className="emoji">💰</span> المبلغ المطلوب سحبه
+                                    </label>
+                                    <p className="field-description">أدخل الكمية التي ترغب بسحبها من رصيدك.</p>
+                                    <input
+                                        type="number"
+                                        name="amount_requested"
+                                        value={formData.amount_requested}
+                                        onChange={handleInputChange}
+                                        required
+                                        min="1"
+                                        step="1"
+                                    />
+                                </div>
+                                <div className="form-field">
+                                    <label>
+                                        <span className="emoji">🔗</span> عنوان المحفظة / البريد الإلكتروني للمرسل
+                                    </label>
+                                    <p className="field-description">أدخل عنوان محفظتك أو البريد الإلكتروني الذي سترسل منه المبلغ.</p>
+                                    <input
+                                        type="text"
+                                        name="sender_address"
+                                        value={formData.sender_address}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                </div>
+                            </>
+                        )}
+                        
+                        {formData.amount_requested > 0 && (
+                            <div className="info-box red my-2">
+                                <p>
+                                    <span className="font-bold">رسوم الخدمة:</span> {formData.service_fee_value.toFixed(2)} {formData.wallet_currency}
+                                </p>
+                                <p className="mt-1">
+                                    <span className="font-bold">المبلغ الصافي المستلم:</span> {(formData.amount_requested - formData.service_fee_value).toFixed(2)} {formData.wallet_currency}
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="form-field">
+                            <label>
+                                <span className="emoji">🏦</span> طريقة الاستلام المفضلة
+                            </label>
+                            <p className="field-description">اختر الطريقة التي تفضلها لاستلام المبلغ بالعملة المحلية.</p>
+                            <select
+                                name="payout_method"
+                                value={formData.payout_method}
+                                onChange={handleInputChange}
+                                required
+                            >
+                                <option value="">اختر...</option>
+                                <option value="العمقي">العمقي للصرافة</option>
+                                <option value="بنك القطيبي">بنك القطيبي</option>
+                                <option value="بنك الكريمي">بنك الكريمي</option>
+                                <option value="تحويل بنكي سعودي">تحويل بنكي سعودي</option>
+                            </select>
+                        </div>
+                        <div className="form-field">
+                            <label>
+                                <span className="emoji">🌍</span> العملة المحلية المطلوبة
+                            </label>
+                            <p className="field-description">اختر العملة التي ترغب باستلامها.</p>
+                            <select
+                                name="payout_currency"
+                                value={formData.payout_currency}
+                                onChange={handleInputChange}
+                                required
+                            >
+                                <option value="ريال يمني جديد">ريال يمني (جديد)</option>
+                                <option value="ريال يمني قديم">ريال يمني (قديم)</option>
+                                <option value="ريال سعودي">ريال سعودي</option>
+                            </select>
+                        </div>
+                        <div className="form-field">
+                            <label>
+                                <span className="emoji">📄</span> بيانات حساب الاستلام
+                            </label>
+                            <p className="field-description">اكتب تفاصيل حسابك (رقم الحساب، اسم المستلم، إلخ).</p>
+                            <textarea
+                                name="receiver_bank_info"
+                                value={formData.receiver_bank_info}
+                                onChange={handleInputChange}
+                                required
+                                rows="3"
+                                placeholder="مثلاً:
+اسم المستلم: علي محمد
+رقم الحساب: 123456789
+البنك: بنك الكريمي"
+                            ></textarea>
+                        </div>
+                        <div className="form-field">
+                            <label>
+                                <span className="emoji">✍️</span> ملاحظات إضافية (اختياري)
+                            </label>
+                            <textarea
+                                name="notes"
+                                value={formData.notes}
+                                onChange={handleInputChange}
+                                rows="2"
+                                placeholder="اكتب أي ملاحظات إضافية..."
+                            ></textarea>
+                        </div>
+                        
+                        <div className="total-amount-box">
+                            المبلغ النهائي الذي ستستلمه: {formData.final_amount_due_local.toFixed(2)} {formData.payout_currency}
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="submit-button mt-4"
+                            disabled={isSubmitting}
+                        >
+                            إرسال طلب السحب
+                        </button>
+                    </form>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

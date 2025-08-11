@@ -91,14 +91,22 @@
             border-color: #ffb3b3;
             color: #b30000;
         }
-        .total-amount-box {
+        .final-amounts {
+            background-color: #f7f7f7;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 1rem;
             margin-top: 1rem;
-            padding: 0.75rem;
-            background-color: #e2f0d9;
-            border: 1px solid #c8e6c9;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
+        }
+        .final-amounts p {
+            margin: 0.25rem 0;
+            font-size: 0.9rem;
+            color: #444;
+        }
+        .final-amounts .exchange-rate-text {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0.5rem;
         }
         .countdown-bar {
             height: 5px;
@@ -227,12 +235,9 @@
             }, [formData.balance_type, formData.crypto_name, formData.wallet_currency]);
 
             const calculateServiceFee = (amountInUSD, balanceType, walletName) => {
-                // Adjust fee for specific wallets
                 if (balanceType === 'wallet' && (['PayPal', 'Payoneer'].includes(walletName) || walletName.toLowerCase().includes('paypal') || walletName.toLowerCase().includes('payoneer'))) {
-                    return amountInUSD * 0.10; // Example fee for PayPal/Payoneer
+                    return amountInUSD * 0.10;
                 }
-                
-                // General fee structure
                 if (amountInUSD <= 50) {
                     return 1;
                 }
@@ -341,19 +346,21 @@
                 const walletCurrencyForShare = formData.wallet_currency === 'أخرى' ? formData.other_wallet_currency : formData.wallet_currency;
 
                 const orderDetails = formData.balance_type === 'crypto' ?
-                    `
-*نوع الرصيد:* عملة رقمية
+                    `*نوع الرصيد:* عملة رقمية
 *العملة الرقمية:* ${sanitizeInput(cryptoNameForShare)}
 *الشبكة:* ${sanitizeInput(cryptoNetworkForShare)}
 *المبلغ المطلوب سحبه:* ${sanitizeInput(formData.amount_requested)} ${sanitizeInput(cryptoNameForShare)}`
                     :
-                    `
-*نوع الرصيد:* محافظ ومنصات رقمية
+                    `*نوع الرصيد:* محافظ ومنصات رقمية
 *اسم المحفظة/المنصة:* ${sanitizeInput(walletNameForShare)}
 *عملة المحفظة:* ${sanitizeInput(walletCurrencyForShare)}
 *المبلغ المطلوب سحبه:* ${sanitizeInput(formData.amount_requested)} ${sanitizeInput(walletCurrencyForShare)}`;
+                
+                const exchangeRateDisplay = formData.payout_currency === 'دولار أمريكي'
+                    ? ''
+                    : `*سعر الصرف:* 1 USD = ${exchangeRates[formData.payout_currency]} ${formData.payout_currency}`;
 
-                const shareText = `*تم إرسال طلب سحب جديد!*
+                const shareText = `*تم إنشاء طلب سحب جديد!*
 -----------------------------
 *رقم الطلب:* ${sanitizeInput(orderId)}
 ${orderDetails}
@@ -363,6 +370,7 @@ ${orderDetails}
 *الملاحظات:* ${sanitizeInput(formData.notes) || 'لا توجد'}
 *طريقة الاستلام:* ${sanitizeInput(payoutMethodForShare)}
 *العملة المحلية المطلوبة:* ${sanitizeInput(formData.payout_currency)}
+${exchangeRateDisplay}
 *المبلغ النهائي للاستلام (بالعملة المحلية):* ${sanitizeInput(formData.final_amount_due_local.toFixed(2))} ${sanitizeInput(formData.payout_currency)}
 *بيانات حساب الاستلام:* ${sanitizeInput(formData.receiver_bank_info)}`;
 
@@ -574,10 +582,9 @@ ${orderDetails}
                 
                 const exchangeRateDisplay = formData.payout_currency === 'دولار أمريكي'
                     ? ''
-                    : `*سعر الصرف:* 1 ${formData.payout_currency} = ${exchangeRates[formData.payout_currency] ? (1/exchangeRates[formData.payout_currency]).toFixed(2) : 'N/A'} USD
-1 USD = ${exchangeRates[formData.payout_currency]} ${formData.payout_currency}`
+                    : `*سعر الصرف:* 1 USD = ${exchangeRates[formData.payout_currency]} ${formData.payout_currency}`;
 
-                const shareText = `*تم إرسال طلب سحب جديد!*
+                const shareText = `*تم إنشاء طلب سحب جديد!*
 -----------------------------
 *رقم الطلب:* ${sanitizeInput(orderId)}
 ${orderDetails}
@@ -587,24 +594,13 @@ ${orderDetails}
 *الملاحظات:* ${sanitizeInput(formData.notes) || 'لا توجد'}
 *طريقة الاستلام:* ${sanitizeInput(payoutMethodForShare)}
 *العملة المحلية المطلوبة:* ${sanitizeInput(formData.payout_currency)}
+${exchangeRateDisplay}
 *المبلغ النهائي للاستلام (بالعملة المحلية):* ${sanitizeInput(formData.final_amount_due_local.toFixed(2))} ${sanitizeInput(formData.payout_currency)}
 *بيانات حساب الاستلام:* ${sanitizeInput(formData.receiver_bank_info)}`;
 
-                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-                window.open(whatsappUrl, '_blank');
-            };
-
-            const currentAmountCurrency = formData.balance_type === 'crypto'
-                ? formData.crypto_name === 'أخرى' ? formData.other_crypto_name : formData.crypto_name
-                : formData.wallet_currency === 'أخرى' ? formData.other_wallet_currency : formData.wallet_currency;
-
-            if (formSubmitted) {
-                const exchangeRate = exchangeRates[formData.payout_currency];
-                const convertedPrice = exchangeRate ? (formData.final_amount_after_fees_usd * exchangeRate).toFixed(2) : 'N/A';
-
                 return (
                     <div className="form-container text-right">
-                        <h2 className="title">تم استلام طلب سحبك بنجاح!</h2>
+                        <h2 className="title">تم إنشاء طلب سحبك بنجاح!</h2>
                         <div className="info-box my-4 p-4 text-sm bg-green-50 border-green-200">
                             <p className="font-bold text-green-800">
                                 <span className="emoji">👈</span> خطوة مهمة!
@@ -614,16 +610,21 @@ ${orderDetails}
                             </p>
                         </div>
                         <div className="p-4 bg-gray-100 rounded-md text-sm">
-                            <p><strong>رقم الطلب:</strong> {sanitizeInput(orderId)}</p>
-                            <hr className="my-2 border-gray-300" />
-                            <p><strong>المبلغ الصافي المستلم (بالدولار):</strong> {sanitizeInput(formData.final_amount_after_fees_usd.toFixed(2))} USD</p>
-                            <p><strong>سعر الصرف:</strong> 1 USD = {sanitizeInput(exchangeRates[formData.payout_currency])} {sanitizeInput(formData.payout_currency)}</p>
-                            <p><strong>المبلغ النهائي للاستلام:</strong> {sanitizeInput(formData.final_amount_due_local.toFixed(2))} {sanitizeInput(formData.payout_currency)}</p>
-                            <hr className="my-2 border-gray-300" />
-                            <p className="mt-2 text-xs text-gray-500">تم حساب المبلغ النهائي بناءً على سعر الصرف الحالي بعد خصم الرسوم.</p>
+                            <p className="font-bold">رقم الطلب: {sanitizeInput(orderId)}</p>
+                            <p className="mt-2">
+                                <span className="font-bold">المبلغ الصافي المستلم (بالدولار):</span> {sanitizeInput(formData.final_amount_after_fees_usd.toFixed(2))} USD
+                            </p>
+                            {formData.payout_currency !== 'دولار أمريكي' && (
+                                <p className="mt-1">
+                                    <span className="font-bold">سعر الصرف:</span> 1 USD = {sanitizeInput(exchangeRates[formData.payout_currency])} {sanitizeInput(formData.payout_currency)}
+                                </p>
+                            )}
+                            <p className="mt-1">
+                                <span className="font-bold">المبلغ النهائي للاستلام:</span> {sanitizeInput(formData.final_amount_due_local.toFixed(2))} {sanitizeInput(formData.payout_currency)}
+                            </p>
                         </div>
                         <button
-                            onClick={handleShare}
+                            onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank')}
                             className="submit-button mt-4 bg-green-500 hover:bg-green-600"
                         >
                             <span className="emoji">✅</span> مشاركة على واتساب
@@ -631,6 +632,10 @@ ${orderDetails}
                     </div>
                 );
             }
+
+            const exchangeRateText = formData.payout_currency === 'دولار أمريكي'
+                ? ''
+                : `سعر الصرف: 1 USD = ${exchangeRates[formData.payout_currency]} ${formData.payout_currency}`;
 
             return (
                 <div className="form-container" dir="rtl">
@@ -790,8 +795,10 @@ ${orderDetails}
                             ></textarea>
                         </div>
                         
-                        <div className="total-amount-box">
-                            المبلغ النهائي الذي ستستلمه: {formData.final_amount_due_local.toFixed(2)} {formData.payout_currency}
+                        <div className="final-amounts">
+                            {exchangeRateText && <p className="exchange-rate-text">{exchangeRateText}</p>}
+                            <p className="font-bold">المبلغ الصافي الذي ستستلمه (بالدولار): <span className="text-blue-600">{formData.final_amount_after_fees_usd.toFixed(2)} USD</span></p>
+                            <p className="font-bold">المبلغ النهائي الذي ستستلمه: <span className="text-blue-600">{formData.final_amount_due_local.toFixed(2)} {formData.payout_currency}</span></p>
                         </div>
 
                         <button
